@@ -1,149 +1,175 @@
-let localCompanies=[];
+let localCompanies = [];
 
-const searchBox=document.getElementById("searchBox");
-const resultsDiv=document.getElementById("results");
-const resultCount=document.getElementById("resultCount");
-const toast=document.getElementById("toast");
+const searchBox = document.getElementById("searchBox");
+const resultsDiv = document.getElementById("results");
+const resultCount = document.getElementById("resultCount");
+const toast = document.getElementById("toast");
 
-/* LOAD LOCAL DATA */
-async function loadLocalData(){
-const res=await fetch("data.json");
-localCompanies=await res.json();
+/* ---------------- LOAD LOCAL DATA ---------------- */
+async function loadLocalData() {
+    const res = await fetch("data.json");
+    localCompanies = await res.json();
 }
 loadLocalData();
 
-/* TOAST */
-function showToast(msg){
-toast.textContent=msg;
-toast.style.opacity=1;
-setTimeout(()=>toast.style.opacity=0,2000);
+/* ---------------- TOAST ---------------- */
+function showToast(msg) {
+    toast.textContent = msg;
+    toast.style.opacity = 1;
+    setTimeout(() => toast.style.opacity = 0, 2000);
 }
 
-/* LIVE COMPANY SEARCH */
-async function fetchLiveCompanies(query){
-try{
-const res=await fetch(
-`https://autocomplete.clearbit.com/v1/companies/suggest?query=${query}`
-);
-return await res.json();
-}catch{
-return [];
-}
-}
-
-/* SEARCH */
-searchBox.addEventListener("input",async()=>{
-
-const query=searchBox.value.trim().toLowerCase();
-resultsDiv.innerHTML="";
-
-if(!query){
-resultCount.textContent="";
-return;
+/* ---------------- LIVE COMPANY SEARCH ---------------- */
+async function fetchLiveCompanies(query) {
+    try {
+        const res = await fetch(
+            `https://autocomplete.clearbit.com/v1/companies/suggest?query=${query}`
+        );
+        return await res.json();
+    } catch {
+        return [];
+    }
 }
 
-const localMatches=localCompanies.filter(c =>
-c.company.toLowerCase().includes(query)
-);
+/* ---------------- LOCATION LOOKUP ---------------- */
+async function fetchCompanyLocation(name) {
+    try {
+        const res = await fetch(
+            `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(name)}&format=json&limit=1`
+        );
 
-const liveMatches=await fetchLiveCompanies(query);
+        const data = await res.json();
 
-resultCount.textContent=
-`${localMatches.length+liveMatches.length} results`;
+        if (data.length > 0) {
+            return data[0].display_name;
+        }
 
-/* LOCAL RESULTS */
-localMatches.forEach(c=>{
-resultsDiv.appendChild(createLocalCard(c));
+        return "Location not available";
+    } catch {
+        return "Location unavailable";
+    }
+}
+
+/* ---------------- SEARCH ---------------- */
+searchBox.addEventListener("input", async () => {
+
+    const query = searchBox.value.trim().toLowerCase();
+    resultsDiv.innerHTML = "";
+
+    if (!query) {
+        resultCount.textContent = "";
+        return;
+    }
+
+    const localMatches = localCompanies.filter(c =>
+        c.company.toLowerCase().includes(query)
+    );
+
+    const liveMatches = await fetchLiveCompanies(query);
+
+    resultCount.textContent =
+        `${localMatches.length + liveMatches.length} results`;
+
+    /* LOCAL VERIFIED RESULTS */
+    localMatches.forEach(c => {
+        resultsDiv.appendChild(createLocalCard(c));
+    });
+
+    /* LIVE RESULTS (ASYNC) */
+    liveMatches.slice(0, 6).forEach(c => {
+        createLiveCard(c).then(card => {
+            resultsDiv.appendChild(card);
+        });
+    });
 });
 
-/* LIVE RESULTS */
-liveMatches.slice(0,6).forEach(c=>{
-resultsDiv.appendChild(createLiveCard(c));
-});
+/* ---------------- LOCAL CARD (VERIFIED CONTACT) ---------------- */
+function createLocalCard(c) {
 
-});
+    const card = document.createElement("div");
+    card.className = "card";
 
-/* LOCAL CARD */
-function createLocalCard(c){
+    card.innerHTML = `
+    <div class="card-header">
+        <div class="header-left">
+            ${c.company}
+            <span class="badge">✔ Verified Hiring Contact</span>
+        </div>
+        <span class="arrow">⌄</span>
+    </div>
 
-const card=document.createElement("div");
-card.className="card";
+    <div class="card-content">
+        <p><b>Contact:</b> ${c.contact}</p>
 
-card.innerHTML=`
-<div class="card-header">
+        <p>
+            <b>Email:</b>
+            <span class="email"
+            onclick="copyEmail(event,'${c.email}')">
+            ${c.email}
+            </span>
+        </p>
 
-<div class="header-left">
-${c.company}
-<span class="badge">✔ Verified Hiring Contact</span>
-</div>
+        ${c.phone ? `<p><b>Phone:</b> ${c.phone}</p>` : ""}
 
-<span class="arrow">⌄</span>
-</div>
+        <p>
+            <a href="${c.careers}" target="_blank">
+                Careers Page
+            </a>
+        </p>
 
-<div class="card-content">
-<p><b>Contact:</b> ${c.contact}</p>
+        <small>Public hiring contact</small>
+    </div>
+    `;
 
-<p>
-<b>Email:</b>
-<span class="email"
-onclick="copyEmail(event,'${c.email}')">
-${c.email}
-</span>
-</p>
+    card.addEventListener("click", () =>
+        card.classList.toggle("open")
+    );
 
-<p>
-<a href="${c.careers}" target="_blank">
-Careers Page
-</a>
-</p>
-
-<small>Public hiring contact</small>
-</div>
-`;
-
-card.addEventListener("click",()=>card.classList.toggle("open"));
-
-return card;
-}
-/* LIVE CARD WITH SAFE LOGO */
-function createLiveCard(c){
-
-const logoURL = c.logo
-? c.logo
-: `https://logo.clearbit.com/${c.domain}`;
-
-const card=document.createElement("div");
-card.className="card open";
-
-card.innerHTML=`
-<div class="card-header">
-<div class="header-left">
-<img
-src="${logoURL}"
-class="company-logo"
-onerror="this.onerror=null;this.src='https://via.placeholder.com/28?text=🏢';">
-${c.name}
-</div>
-</div>
-
-<div class="card-content" style="max-height:200px;padding-bottom:18px;">
-<p>${c.domain}</p>
-
-<a href="https://${c.domain}" target="_blank">
-Visit Company Website
-</a>
-
-<br>
-<small>Live company lookup</small>
-</div>
-`;
-
-return card;
+    return card;
 }
 
-/* COPY EMAIL */
-function copyEmail(event,email){
-event.stopPropagation();
-navigator.clipboard.writeText(email);
-showToast("Email copied");
+/* ---------------- LIVE CARD WITH LOCATION ---------------- */
+async function createLiveCard(c) {
+
+    const logoURL = c.logo
+        ? c.logo
+        : `https://logo.clearbit.com/${c.domain}`;
+
+    const location = await fetchCompanyLocation(c.name);
+
+    const card = document.createElement("div");
+    card.className = "card open";
+
+    card.innerHTML = `
+    <div class="card-header">
+        <div class="header-left">
+            <img
+                src="${logoURL}"
+                class="company-logo"
+                onerror="this.onerror=null;this.src='https://via.placeholder.com/28?text=🏢';">
+            ${c.name}
+        </div>
+    </div>
+
+    <div class="card-content" style="max-height:260px;padding-bottom:18px;">
+        <p><b>Website:</b> ${c.domain}</p>
+        <p><b>Location:</b> ${location}</p>
+
+        <a href="https://${c.domain}" target="_blank">
+            Visit Company Website
+        </a>
+
+        <br>
+        <small>Live company data</small>
+    </div>
+    `;
+
+    return card;
+}
+
+/* ---------------- COPY EMAIL ---------------- */
+function copyEmail(event, email) {
+    event.stopPropagation();
+    navigator.clipboard.writeText(email);
+    showToast("Email copied");
 }

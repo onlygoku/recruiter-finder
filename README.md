@@ -145,4 +145,3 @@ This project does not scrape, collect, or distribute private personal data.
 ## Author
 
 Built as a frontend portfolio project demonstrating modern UI/UX design, asynchronous JavaScript, API integration, and real-world deployment workflow.
-
